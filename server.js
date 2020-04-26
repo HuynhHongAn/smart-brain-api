@@ -2,10 +2,23 @@ const express = require('express')
 const bodyParser = require('body-parser')
 const bcrypt = require('bcrypt')
 const cors = require('cors')
+const knex = require('knex')
 
 const app = express()
 app.use(bodyParser.json())
 app.use(cors())
+
+const db = knex({
+    client: 'pg',
+    // version: '7.2',
+    connection: {
+        host : '127.0.0.1',
+        user : 'postgres',
+        password : '123456',
+        database : 'smart-brain'
+    }
+});
+
 
 const database = {
     users: [
@@ -55,30 +68,38 @@ app.post('/signin', (req, res) => {
 
 app.put('/signup', (req, res) => {
     const {name, email, password} = req.body
-    database.users.push({
-        id: "323",
+    db('users')
+        .returning("*")
+        .insert({
         name: name,
         email: email,
-        password: password,
-        entries: 0,
-        joined: new Date()
-    })
+        joined: new Date(),
+
+        })
+        .then(users => {
+            console.log(users[0])
+        })
+        .catch(err => res.status(400).json("unable to sign up"))
     res.json(database.users[database.users.length - 1])
 })
 
 app.get("/profile/:id", (req, res) => {
     const {id} = req.params
     let found = false
-    database.users.forEach(user => {
-        if (user.id === id) {
-            found = true
-            res.json(user)
-        }
-    })
-    if (!found) {
-        res.status(400).json("user not found")
-
-    }
+    db
+        .select("*")
+        .from("users")
+        .where({
+            id: id
+        })
+        .then(users => {
+            if (users.length) {
+                res.json(users[0])
+            } else {
+                res.status(400).json("not found")
+            }
+        })
+        .catch(err => res.status(400).json("Error getting profile", err))
 })
 
 app.put('/image', (req, res) => {
@@ -91,10 +112,20 @@ app.put('/image', (req, res) => {
             res.json(user.entries)
         }
     })
-    if (!found) {
-        res.status(400).json("user not found")
-
-    }
+    db
+        .table("users")
+        .returning("*")
+        .where('id', '=', id)
+        .increment({
+            entries: 1,
+        })
+        .then(users => {
+            if (users.length) {
+                res.json(users[0])
+            } else {
+                res.status(400).json("User not found")
+            }
+        })
 })
 
 app.listen(3000, ()=> {
